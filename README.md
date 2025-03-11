@@ -1,57 +1,56 @@
-# ChirpStack Gateway Mesh
+# ChirpStack Gateway Mesh Custom
 
-ChirpStack Gateway Mesh is a software component that can turn a LoRa<sup>&reg;</sup>
-gateway into a relay. This makes it possible to extend the LoRa coverage, without
-the need to connect each LoRa gateway to the internet.
+This project is a fork of [ChirpStack Gateway Mesh](https://github.com/chirpstack/chirpstack-gateway-mesh), modified to enhance its functionality. The custom implementation forces the gateway to act as a **mesh border node** while also supporting the **transmission of periodic heartbeat packets** to maintain network stability and monitoring.
 
-## Documentation and binaries
+## Documentation and Binaries
 
-Please refer to the [ChirpStack Gateway Mesh](https://www.chirpstack.io/docs/chirpstack-gateway-mesh/)
-for documentation and pre-compiled binaries.
+For general documentation and pre-compiled binaries, please refer to the [ChirpStack Gateway Mesh Documentation](https://www.chirpstack.io/docs/chirpstack-gateway-mesh/).
 
-## Building from source
+## Custom Modifications
+
+This version introduces the following enhancements:
+- **Mesh Border Enforcement**: Configures the gateway as a fixed border node within the mesh network.
+- **Heartbeat Packet Transmission**: Periodically sends heartbeat packets to help monitor network health and ensure connectivity.
+
+## Building from Source
 
 ### Requirements
 
-Building ChirpStack Gateway Mesh requires:
+Building this project requires:
 
-* [Nix](https://nixos.org/download.html) (recommended) and
-* [Docker](https://www.docker.com/)
+- [Nix](https://nixos.org/download.html) (recommended)
+- [Docker](https://www.docker.com/)
 
 #### Nix
 
-Nix is used for setting up the development environment which is used for local
-development and compiling the binaries. As an alternative, you could install
-these dependencies manually, please refer to `shell.nix`.
+Nix is used to set up the development environment for local development and compilation. Alternatively, dependencies can be installed manually by referring to `shell.nix`.
 
 #### Docker
 
-Docker is used by [cross-rs](https://github.com/cross-rs/cross) for cross-compiling,
-as well as some of the `make` commands.
+Docker is used by [cross-rs](https://github.com/cross-rs/cross) for cross-compiling and also for some of the `make` commands.
 
-### Starting the development shell
+### Starting the Development Shell
 
-Execute the following command to start the development shell:
+Run the following command to start the development shell:
 
 ```bash
 nix-shell
 ```
 
-### Running tests
+### Running Tests
 
-Execute the following command to run the tests:
+To run the test suite, execute:
 
 ```bash
 make test
 ```
 
-### Compiling binaries
+### Compiling Binaries
 
-Execute the following commands to build the ChirpStack Gateway Mesh binaries and
-packages:
+To build the ChirpStack Gateway Mesh binaries and packages, use:
 
 ```bash
-# Only compile binaries
+# Compile binaries only
 make build
 
 # Compile binaries and build distributable packages
@@ -60,4 +59,4 @@ make dist
 
 ## License
 
-ChirpStack Gateway Mesh is distributed under the MIT license. See also [LICENSE](https://github.com/chirpstack/chirpstack-gateway-mesh/blob/master/LICENSE).
+This project is distributed under the MIT license. See [LICENSE](https://github.com/chirpstack/chirpstack-gateway-mesh/blob/master/LICENSE) for details.
