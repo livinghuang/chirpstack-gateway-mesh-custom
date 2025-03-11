@@ -15,17 +15,30 @@ use crate::packets;
 pub async fn setup(conf: &Configuration) -> Result<()> {
     // Only Relay gatewways need to report heartbeat as the Border Gateway is already internet
     // connected and reports status through the Concentratord.
-    if conf.mesh.border_gateway || conf.mesh.heartbeat_interval.is_zero() {
+    // if conf.mesh.border_gateway || conf.mesh.heartbeat_interval.is_zero() {
+    //     return Ok(());
+    // }
+
+// above is origin code ,below is open let border could set heart beat
+    let my_heartbeat_interval = if conf.mesh.border_gateway {
+        std::time::Duration::from_secs(60)  // 固定 1 分鐘
+    } else {
+        conf.mesh.heartbeat_interval  // 其他 Relay Gateway 使用 config 設定的間隔
+    };
+
+    if my_heartbeat_interval.is_zero() {
         return Ok(());
     }
-
+//
     info!(
         "Starting heartbeat loop, heartbeat_interval: {:?}",
-        conf.mesh.heartbeat_interval
+        // conf.mesh.heartbeat_interval //(revise:living huang)
+        my_heartbeat_interval // add living huang
     );
 
     tokio::spawn({
-        let heartbeat_interval = conf.mesh.heartbeat_interval;
+        // let heartbeat_interval = conf.mesh.heartbeat_interval;
+        let heartbeat_interval = my_heartbeat_interval; // add living huang
 
         async move {
             loop {
