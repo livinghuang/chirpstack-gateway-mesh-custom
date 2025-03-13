@@ -59,7 +59,7 @@ async fn test_border_gateway_mesh_heartbeat_beacon() {
                 hop_count: 1,
             },
             payload: packets::Payload::Heartbeat(packets::HeartbeatPayload {
-                relay_id: [2, 2, 2, 2],
+                relay_id: [0, 0, 0, 0],
                 timestamp: UNIX_EPOCH,
                 relay_path: vec![],
             }),

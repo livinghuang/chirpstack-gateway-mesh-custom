@@ -7,6 +7,7 @@ use zeromq::{SocketRecv, SocketSend};
 
 use chirpstack_gateway_mesh::aes128::Aes128Key;
 use chirpstack_gateway_mesh::packets;
+
 mod common;
 
 /*
@@ -17,37 +18,7 @@ mod common;
 async fn test_border_gateway_downlink_mesh() {
     common::setup(true).await;
 
-    // ✅ 1. 等待 Mesh Network 回傳 Heartbeat
-    let mut down: gw::DownlinkFrame = {
-        let mut cmd_sock = common::MESH_BACKEND_COMMAND_SOCK.get().unwrap().lock().await;
-        let msg = cmd_sock.recv().await.expect("❌ Failed to receive message from MESH_BACKEND_COMMAND_SOCK");
-
-        let cmd = String::from_utf8(msg.get(0).map(|v| v.to_vec()).unwrap()).unwrap();
-        assert_eq!("down", cmd);
-
-        gw::DownlinkFrame::decode(msg.get(1).cloned().unwrap()).expect("❌ Failed to decode DownlinkFrame")
-    };
-
-    // ✅ 2. 解析 Heartbeat 並確認收到
-    let heartbeat_down_item = down.items.first().expect("❌ No items in received DownlinkFrame!");
-    let heartbeat_mesh_packet = packets::MeshPacket::from_slice(&heartbeat_down_item.phy_payload)
-        .expect("❌ Failed to parse MeshPacket!");
-
-    println!("📥 Received down_item: {:?}", heartbeat_down_item);
-    println!("📦 Parsed mesh_packet: {:?}", heartbeat_mesh_packet);
-
-    // ✅ 3. 確認收到 Heartbeat 才繼續
-    match heartbeat_mesh_packet.payload {
-        packets::Payload::Heartbeat(_) => {
-            println!("✅ We successfully got Heartbeat! Now starting the downlink test...");
-        },
-        _ => {
-            panic!("❌ Expected a Heartbeat packet but received something else!");
-        }
-    }
-
-    // ✅ 4. 發送 Downlink 測試封包
-    let mut down = gw::DownlinkFrame {
+    let down = gw::DownlinkFrame {
         downlink_id: 1,
         gateway_id: "0101010101010101".into(),
         items: vec![gw::DownlinkFrameItem {
@@ -80,7 +51,7 @@ async fn test_border_gateway_downlink_mesh() {
         ..Default::default()
     };
 
-    // ✅ 5. 發送 Downlink 測試命令
+    // Publish downlink command.
     {
         let mut cmd_sock = common::FORWARDER_COMMAND_SOCK.get().unwrap().lock().await;
         cmd_sock
@@ -93,29 +64,28 @@ async fn test_border_gateway_downlink_mesh() {
                 .unwrap(),
             )
             .await
-            .expect("❌ Failed to send downlink test command");
+            .unwrap();
     }
-    println!("✅ Downlink test started!");
 
-    // ✅ 6. 接收 Downlink 回應
+    // We expect the wrapped downlink to be received by the mesh concentratord.
     let down: gw::DownlinkFrame = {
-        let mut cmd_sock = common::MESH_BACKEND_COMMAND_SOCK.get().unwrap().lock().await;
-        let msg = cmd_sock.recv().await.expect("❌ Failed to receive downlink response");
+        let mut cmd_sock = common::MESH_BACKEND_COMMAND_SOCK
+            .get()
+            .unwrap()
+            .lock()
+            .await;
+        let msg = cmd_sock.recv().await.unwrap();
 
         let cmd = String::from_utf8(msg.get(0).map(|v| v.to_vec()).unwrap()).unwrap();
         assert_eq!("down", cmd);
 
-        gw::DownlinkFrame::decode(msg.get(1).cloned().unwrap()).expect("❌ Failed to decode DownlinkFrame")
+        gw::DownlinkFrame::decode(msg.get(1).cloned().unwrap()).unwrap()
     };
 
-    // ✅ 7. 解析並打印 Downlink 回應
-    let down_item = down.items.first().expect("❌ Downlink response is empty!");
-    let mesh_packet = packets::MeshPacket::from_slice(&down_item.phy_payload)
-        .expect("❌ Failed to parse MeshPacket!");
-    println!("📥 Received downlink response: {:?}", down_item);
-    println!("📦 Parsed downlink mesh_packet: {:?}", mesh_packet);
-    std::process::exit(0);
-assert_eq!(
+    let down_item = down.items.first().unwrap();
+    let mesh_packet = packets::MeshPacket::from_slice(&down_item.phy_payload).unwrap();
+
+    assert_eq!(
         {
             let mut packet = packets::MeshPacket {
                 mhdr: packets::MHDR {

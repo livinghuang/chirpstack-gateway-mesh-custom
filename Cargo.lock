@@ -168,6 +168,7 @@ dependencies = [
  "handlebars",
  "hex",
  "humantime-serde",
+ "libc",
  "log",
  "lrwn_filters",
  "prost-types",

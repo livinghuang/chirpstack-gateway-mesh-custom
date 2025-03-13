@@ -1,6 +1,10 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+use libc::{settimeofday, timeval};
+
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::sync::Mutex;
+use hex::encode;
 
 use anyhow::Result;
 use chirpstack_api::gw;
@@ -36,9 +40,41 @@ pub async fn handle_uplink(border_gateway: bool, pl: gw::UplinkFrame) -> Result<
 }
 
 // Handle Proprietary LoRaWAN payload (mesh encapsulated).
+// pub async fn handle_mesh(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()> {
+//     let conf = config::get();
+//     let packet = MeshPacket::from_slice(&pl.phy_payload)?;
+//     if !packet.validate_mic(conf.mesh.signing_key)? {
+//         warn!("Dropping packet, invalid MIC, mesh_packet: {}", packet);
+//         return Ok(());
+//     }
+
+//     // If we can't add the packet to the cache, it means we have already seen the packet and we can
+//     // drop it.
+//     if !PAYLOAD_CACHE.lock().unwrap().add((&packet).into()) {
+//         trace!(
+//             "Dropping packet as it has already been seen, mesh_packet: {}",
+//             packet
+//         );
+//         return Ok(());
+//     };
+
+//     match border_gateway {
+//         // Proxy relayed uplink
+//         true => match packet.mhdr.payload_type {
+//             PayloadType::Uplink => proxy_uplink_mesh_packet(&pl, packet).await,
+//             PayloadType::Heartbeat => proxy_heartbeat_mesh_packet(&pl, packet).await,
+//             _ => Ok(()),
+//         },
+//         false => relay_mesh_packet(&pl, packet).await,
+//     }
+// }
+
+// below is revise by living huang
+// Handle Proprietary LoRaWAN payload (mesh encapsulated).
 pub async fn handle_mesh(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()> {
     let conf = config::get();
     let packet = MeshPacket::from_slice(&pl.phy_payload)?;
+    
     if !packet.validate_mic(conf.mesh.signing_key)? {
         warn!("Dropping packet, invalid MIC, mesh_packet: {}", packet);
         return Ok(());
@@ -58,12 +94,27 @@ pub async fn handle_mesh(border_gateway: bool, pl: gw::UplinkFrame) -> Result<()
         // Proxy relayed uplink
         true => match packet.mhdr.payload_type {
             PayloadType::Uplink => proxy_uplink_mesh_packet(&pl, packet).await,
-            PayloadType::Heartbeat => proxy_heartbeat_mesh_packet(&pl, packet).await,
+            PayloadType::Heartbeat => {
+                // Check if relay_id is 00000000 (i.e., [0x00, 0x00, 0x00, 0x00])
+                if let packets::Payload::Heartbeat(heartbeat_payload) = &packet.payload {
+                    if heartbeat_payload.relay_id == [0x00, 0x00, 0x00, 0x00] {
+                        info!(
+                            "Ignoring heartbeat packet with relay_id 00000000, mesh_packet: {}",
+                            packet
+                        );
+                        return Ok(());
+                    }
+                }
+                proxy_heartbeat_mesh_packet(&pl, packet).await
+            }
             _ => Ok(()),
         },
         false => relay_mesh_packet(&pl, packet).await,
     }
 }
+
+
+
 
 pub async fn handle_downlink(pl: gw::DownlinkFrame) -> Result<gw::DownlinkTxAck> {
     if let Some(first_item) = pl.items.first() {
@@ -299,6 +350,58 @@ async fn relay_mesh_packet(pl: &gw::UplinkFrame, mut packet: MeshPacket) -> Resu
         "Re-relaying mesh packet, downlink_id: {}, mesh_packet: {}",
         pl.downlink_id, packet
     );
+
+
+    if !conf.mesh.border_gateway {
+        if let packets::Payload::Heartbeat(pl) = &packet.payload {
+            let relay_id_hex = encode(pl.relay_id); // Converts [u8; 4] to hex string
+            let payload_timestamp = pl.timestamp;
+            info!(
+                "Heartbeat packet: relay_id={}, timestamp={:?}",
+                relay_id_hex, payload_timestamp
+            );
+            if pl.relay_id == [0, 0, 0, 0] {
+                info!("This packet is from the border gateway.");
+                    // Get current system time
+                let time_now = SystemTime::now();
+                // Compute duration since UNIX epoch (handle potential errors safely)
+                let _time_now_sec = match time_now.duration_since(UNIX_EPOCH) {
+                    Ok(duration_since_epoch) => {
+                        let sec = duration_since_epoch.as_secs();
+                        info!("Current system time: sec={}", sec);
+                        sec
+                    }
+                    Err(e) => {
+                        warn!("System clock error: {}", e);
+                        0
+                    }
+                };
+                // Compute duration since UNIX epoch (handle potential errors safely)
+                let _payload_timestamp_sec = match payload_timestamp.duration_since(UNIX_EPOCH) {
+                    Ok(duration_since_epoch) => {
+                        let sec = duration_since_epoch.as_secs();
+                        info!("Payload timestamp: sec={}", sec);
+                        sec
+                    }
+                    Err(e) => {
+                        warn!("Payload timestamp error: {}", e);
+                        0
+                    }
+                };
+                unsafe {
+                        let tv = timeval {
+                            tv_sec: _payload_timestamp_sec as i64,
+                            tv_usec: 0,
+                        };
+                        if settimeofday(&tv as *const timeval, std::ptr::null()) != 0 {
+                            warn!("Failed to sync system time: {}", std::io::Error::last_os_error());
+                        } else {
+                            info!("System time successfully synced to packet time.");
+                        }
+                }
+            }
+        }
+    } 
     backend::mesh(&pl).await
 }
 

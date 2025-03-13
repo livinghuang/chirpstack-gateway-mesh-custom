@@ -72,7 +72,7 @@ impl Default for Mesh {
     fn default() -> Self {
         Mesh {
             signing_key: Aes128Key::null(),
-            heartbeat_interval: Duration::from_secs(300),
+            heartbeat_interval: Duration::from_secs(60),
             frequencies: vec![868100000, 868300000, 868500000],
             data_rate: DataRate {
                 modulation: Modulation::LORA,
